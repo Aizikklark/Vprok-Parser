@@ -1,9 +1,24 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 
+// Используем плагин stealth
+puppeteer.use(StealthPlugin());
+
 async function scrapeProduct(url, region) {
-    const browser = await puppeteer.launch({ headless: false });
+    const browser = await puppeteer.launch({
+        headless: true, // Остаемся в headless режиме
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
     const page = await browser.newPage();
+    // Установка пользовательского агента и других настроек может помочь
+    await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36'
+    );
+
+    await page.setViewport({ width: 1280, height: 720 });
+
     const delay_page = 90000; // Время ожидания (в миллисекундах) для полной загрузки страницы (90 секунд)
     const delay_button = 30000; // Время ожидания (в миллисекундах) для отображения и полной отрисовки кнопки "Москва и область" (30 секунд)
     const delay_region = 10000; // Время ожидания (в миллисекундах) для исчезновения окна выбора региона после клика (10 секунд)
@@ -14,8 +29,6 @@ async function scrapeProduct(url, region) {
     // Блокируем уведомления
     const context = browser.defaultBrowserContext();
     await context.overridePermissions(url, []);
-
-    await page.setViewport({ width: 1200, height: 800 });
 
     console.log('Открываем страницу...');
     try {
@@ -263,8 +276,24 @@ async function scrapeProduct(url, region) {
 
     console.log('Делаем скриншот страницы...');
     try {
-        // Добавляем небольшую задержку перед скриншотом для стабилизации страницы
-        await new Promise((resolve) => setTimeout(resolve, 500)); // 500 миллисекунд
+        // Скрываем ненужные элементы или настраиваем элементы на странице
+        await page.evaluate(() => {
+            document
+                .querySelectorAll('.footer, .popup, .cookie-consent')
+                .forEach((el) => el.remove());
+        });
+
+        // Добавляем задержку для стабилизации страницы
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Задержка 2 секунды
+
+        // Устанавливаем viewport в зависимости от содержания
+        const bodyHandle = await page.$('body');
+        const boundingBox = await bodyHandle.boundingBox();
+        await page.setViewport({
+            width: Math.ceil(boundingBox.width),
+            height: Math.ceil(boundingBox.height),
+        });
+        await bodyHandle.dispose();
 
         // Сделать скриншот
         await page.screenshot({ path: 'screenshot.jpg', fullPage: true });
